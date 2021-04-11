@@ -8,6 +8,8 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Flurl.Http;
 using HtmlAgilityPack;
+using JiebaNet.Analyser;
+using JiebaNet.Segmenter;
 
 namespace LearnCarNonCore
 {
@@ -45,24 +47,36 @@ namespace LearnCarNonCore
             dt.Columns.Add("correct_answer");
             ds.Locale = System.Threading.Thread.CurrentThread.CurrentCulture;
             dt.Locale = System.Threading.Thread.CurrentThread.CurrentCulture;
-
+           
             if (bookId == 4)
             {
                 //automatic classify    
                 Console.WriteLine("book 4 auto classify");
+
                 Regex r = new Regex(@"[0-9]+" ,RegexOptions.Compiled);
                 var hasMoneyQuestion = questions.Where(x => r.IsMatch(x.answer) && x.answer.Contains("元"));
                 var groupedHasMoneyQuestion = hasMoneyQuestion.GroupBy(x => x.answer).OrderBy(x=>x.Key.First(d=>char.IsDigit(d)));
                 foreach (var groupQ in groupedHasMoneyQuestion)
                 {
-                   
+                    var text = new StringBuilder();
                     var tempT = new DataTable(groupQ.Key);
                     tempT.Columns.Add("question");
                     tempT.Columns.Add("correct_answer");
                     tempT.Locale = System.Threading.Thread.CurrentThread.CurrentCulture;
                     foreach (var q in groupQ)
                     {
+                        text.AppendLine(q.Text);
                         tempT.Rows.Add(q.Text,q.answer);
+                    }
+                  
+                    var result = tfidf.ExtractTagsWithWeight(text.ToString(), 10, null);
+                
+                    Console.WriteLine("正在分析關鍵詞");
+                    tempT.Rows.Add("","");
+                    tempT.Rows.Add("關鍵詞", "權重");
+                    foreach (var k in result)
+                    {
+                        tempT.Rows.Add(k.Word, k.Weight);
                     }
                     ds.Tables.Add(tempT);
                 }
@@ -85,6 +99,7 @@ namespace LearnCarNonCore
             ExcelLibrary.DataSetHelper.CreateWorkbook($"{bName}.xls", ds);
             Console.WriteLine($"done---saved :{bName}.xls");
         }
+        static TfidfExtractor tfidf = new TfidfExtractor();
         static async Task<BlockingCollection<Question>> CrawlBook(int id = 4)
         {
             //https://manwell.clickrapp.com/new/questions_read/index/1.html?&books=4&p=1
@@ -134,12 +149,12 @@ namespace LearnCarNonCore
             return questions;
         }
 
-        
+        JiebaSegmenter segmenter = new JiebaSegmenter();
         static void Main(string[] args)
         {
-            
+            tfidf.AddStopWords(new List<string>() { "車及", "如實施" ,"車輛", "駕駛員應", "科處" , "通過" , "罰款","罰金"  , "澳門幣" , "車輛" , "駕駛員應", "駕駛" , "累犯" ,"不能"  , "行駛" , "遵守" , "駕駛時" , "規定者", "道路", "違者" });
             //here input the account and password xxxxx,xxx
-            var isLogin =Login("xxxx", "xxxx").GetAwaiter().GetResult();
+            var isLogin = Login("xxx", "xxx").GetAwaiter().GetResult();
             if (isLogin)
             {
                 Console.WriteLine("well ,login ok");
